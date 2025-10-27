@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Block Fight - by J1WI Joel</title>
+<style>
+  body { margin: 0; overflow: hidden; background: #000; color: white; font-family: monospace; }
+  #shop {
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0,0,0,0.85);
+    padding: 20px; border: 2px solid #0f0;
+    display: none; color: #0f0; text-align: center;
+  }
+  button {
+    margin: 10px; background: #0f0; border: none; padding: 10px;
+    cursor: pointer; font-weight: bold; border-radius: 8px;
+  }
+  button:hover { background: #3f3; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="shop">
+  <h2>🏪 SHOP / 商店</h2>
+  <p>Money: <span id="money">0</span></p>
+  <button id="speedUp">💨 Upgrade Speed (Cost: 50)</button><br>
+  <button id="hpUp">❤️ Upgrade HP (Cost: 50)</button><br>
+  <button id="atkUp">🔫 Upgrade Bullet Speed (Cost: 70)</button><br>
+  <button id="closeShop">Close / 關閉 (E)</button>
+</div>
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+let gameState = "start";
+let keys = {};
+let bullets = [];
+let enemies = [];
+let score = 0, level = 1, money = 0;
+let frame = 0, spawnSpeed = 100;
+
+const player = {
+  x: canvas.width / 2 - 25,
+  y: canvas.height / 2 - 25,
+  size: 40,
+  speed: 5,
+  hp: 3,
+  bulletSpeed: 8
+};
+
+document.addEventListener("keydown", e => {
+  keys[e.key.toLowerCase()] = true;
+  if (e.key === "Enter" && (gameState === "start" || gameState === "gameover")) startGame();
+  if (e.key.toLowerCase() === "e" && gameState === "play") toggleShop();
+  if (e.key === " ") shoot();
+});
+document.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
+canvas.addEventListener("click", shoot);
+
+function startGame() {
+  gameState = "play";
+  player.hp = 3; bullets = []; enemies = [];
+  score = 0; money = 0; level = 1; spawnSpeed = 100;
+}
+
+const shopDiv = document.getElementById("shop");
+const moneySpan = document.getElementById("money");
+document.getElementById("closeShop").onclick = toggleShop;
+document.getElementById("speedUp").onclick = () => { if (money>=50){money-=50;player.speed++;updateShop();}};
+document.getElementById("hpUp").onclick = () => { if (money>=50){money-=50;player.hp++;updateShop();}};
+document.getElementById("atkUp").onclick = () => { if (money>=70){money-=70;player.bulletSpeed+=1;updateShop();}};
+function updateShop(){moneySpan.textContent=money;}
+function toggleShop(){
+  if (shopDiv.style.display==="none"||shopDiv.style.display===""){
+    shopDiv.style.display="block";
+  } else { shopDiv.style.display="none"; }
+}
+
+function shoot() {
+  if (gameState!=="play") return;
+  bullets.push({
+    x: player.x + player.size/2 - 5,
+    y: player.y,
+    size: 6,
+    speed: player.bulletSpeed
+  });
+}
+
+function spawnEnemy() {
+  const size = 20 + Math.random() * 20;
+  const side = Math.floor(Math.random() * 4);
+  let x, y;
+  if (side === 0) { x = 0; y = Math.random() * canvas.height; }
+  else if (side === 1) { x = canvas.width; y = Math.random() * canvas.height; }
+  else if (side === 2) { x = Math.random() * canvas.width; y = 0; }
+  else { x = Math.random() * canvas.width; y = canvas.height; }
+  enemies.push({x, y, size, speed: 1 + level * 0.4, hp: 1 + Math.floor(level/3)});
+}
+
+function update() {
+  if (gameState === "start") {
+    ctx.fillStyle = "white";
+    ctx.font = "40px monospace";
+    ctx.fillText("BLOCK FIGHT", canvas.width/2 - 150, canvas.height/2 - 100);
+    ctx.font = "24px monospace";
+    ctx.fillText("by J1WI Joel", canvas.width/2 - 70, canvas.height/2 - 60);
+    ctx.font = "18px monospace";
+    ctx.fillText("How to Play / 遊戲教學", canvas.width/2 - 100, canvas.height/2 - 20);
+    ctx.fillText("Move: W A S D  /  射擊: 滑鼠點擊 或 空白鍵", canvas.width/2 - 200, canvas.height/2 + 10);
+    ctx.fillText("Open Shop: E / 打開商店：E", canvas.width/2 - 100, canvas.height/2 + 40);
+    ctx.fillText("Press ENTER to Start / 按 ENTER 開始", canvas.width/2 - 150, canvas.height/2 + 80);
+    return;
+  }
+
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  if (keys["w"]||keys["arrowup"]) player.y -= player.speed;
+  if (keys["s"]||keys["arrowdown"]) player.y += player.speed;
+  if (keys["a"]||keys["arrowleft"]) player.x -= player.speed;
+  if (keys["d"]||keys["arrowright"]) player.x += player.speed;
+  if (player.x<0) player.x=0;
+  if (player.y<0) player.y=0;
+  if (player.x+player.size>canvas.width) player.x=canvas.width-player.size;
+  if (player.y+player.size>canvas.height) player.y=canvas.height-player.size;
+
+  frame++;
+  if (frame % spawnSpeed === 0) spawnEnemy();
+
+  // 更新子彈
+  bullets.forEach((b, bi) => {
+    b.y -= b.speed;
+    if (b.y + b.size < 0) bullets.splice(bi,1);
+  });
+
+  // 更新敵人
+  enemies.forEach((e, ei) => {
+    const dx = player.x - e.x;
+    const dy = player.y - e.y;
+    const dist = Math.hypot(dx, dy);
+    e.x += (dx/dist) * e.speed;
+    e.y += (dy/dist) * e.speed;
+
+    // 子彈打中敵人
+    bullets.forEach((b, bi) => {
+      if (b.x < e.x+e.size && b.x+b.size > e.x && b.y < e.y+e.size && b.y+b.size > e.y) {
+        e.hp--; bullets.splice(bi,1);
+        if (e.hp <= 0) {
+          enemies.splice(ei,1);
+          score+=10; money+=10;
+        }
+      }
+    });
+
+    // 敵人撞到玩家
+    if (player.x < e.x+e.size && player.x+player.size > e.x && player.y < e.y+e.size && player.y+player.size > e.y) {
+      player.hp--;
+      enemies.splice(ei,1);
+      if (player.hp <= 0) gameState = "gameover";
+    }
+  });
+
+  // 繪製
+  ctx.fillStyle = "lime";
+  ctx.fillRect(player.x, player.y, player.size, player.size);
+
+  ctx.fillStyle = "yellow";
+  bullets.forEach(b => ctx.fillRect(b.x,b.y,b.size,b.size));
+
+  ctx.fillStyle = "red";
+  enemies.forEach(e => ctx.fillRect(e.x,e.y,e.size,e.size));
+
+  ctx.fillStyle = "white";
+  ctx.font = "20px monospace";
+  ctx.fillText(`Score: ${score}`,20,30);
+  ctx.fillText(`HP: ${player.hp}`,20,60);
+  ctx.fillText(`Money: ${money}`,20,90);
+  ctx.fillText(`Level: ${level}`,20,120);
+
+  if (score % 200 === 0 && score!==0) { level++; spawnSpeed = Math.max(30, spawnSpeed - 10); }
+
+  if (gameState === "gameover") {
+    ctx.fillStyle = "red";
+    ctx.font = "50px monospace";
+    ctx.fillText("GAME OVER", canvas.width/2 - 150, canvas.height/2);
+    ctx.font = "24px monospace";
+    ctx.fillText(`Final Score: ${score}`, canvas.width/2 - 80, canvas.height/2 + 40);
+    ctx.fillText("Press ENTER to Restart / 按 ENTER 重玩", canvas.width/2 - 160, canvas.height/2 + 80);
+  }
+}
+
+function loop(){update();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>
